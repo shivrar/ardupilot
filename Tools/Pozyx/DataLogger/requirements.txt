@@ -1,0 +1,4 @@
+pyserial>=3.0
+python-osc  # needed for communication with Processing
+requests  # needed for version check
+pypozyx
