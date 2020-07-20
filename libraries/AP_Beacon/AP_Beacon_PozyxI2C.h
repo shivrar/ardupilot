@@ -16,7 +16,7 @@ class AP_Beacon_PozyxI2C : public AP_Beacon_Backend
 {
 public:
     // Constructor
-    AP_Beacon_PozyxI2C(AP_Beacon &frontend, AP_HAL::OwnPtr<AP_HAL::I2CDevice> dev)
+    AP_Beacon_PozyxI2C(AP_Beacon &frontend);
 
     // return true if sensor is basically healthy (we are receiving data)
     bool healthy() override;
@@ -25,14 +25,14 @@ public:
     void update(void) override;
 
     // Setup the relevant stuffies for the Pozyx tag
-    void init(void);
+    void init(int8_t bus);
 
     // Would need to add a anchor which would need the position (x,y,z) and the ID
-    void add_device(const Vector3& position, uint16_t tag_id);
+    void add_device(const Vector3f& position, uint16_t tag_id);
 
 
 private:
-    struct Coordinates{
+    struct PACKED Coordinate{
         // Coordinate data will be stored as mm
         int32_t x;
         int32_t y;
@@ -41,7 +41,7 @@ private:
     };
 
     // Lets have a member variable to store the hal i2c ifc
-    AP_HAL::OwnPtr<AP_HAL::I2CDevice> _dev;
+    AP_HAL::OwnPtr<AP_HAL::Device> dev;
 };
 
 //

@@ -7,8 +7,8 @@
 */
 
 #include <AP_HAL/AP_HAL.h>
-#include <AP_HAL/I2CDevice.h>
-#include <AP_Beacon_PozyxI2C.h>
+#include <AP_Beacon/AP_Beacon_PozyxI2C.h>
+
 
 const AP_HAL::HAL& hal = AP_HAL::get_HAL();
 //We can hardcode the anchor positions here for the time being
@@ -23,11 +23,14 @@ void setup(void)
      * -Connect to bus and return checkable data if successful or not.
      * -Configure the pozyx tag with the relvenat acnhor, algorithm, dimension etc.
      * */
+    hal.console->printf("hello world\n");
 }
 
 void loop(void)
 {
     // Do positioning periodically and serial print it -> we can look at this using a serial moniter or mavproxy
+    hal.scheduler->delay(1000);
+    hal.console->printf("*\n");
 }
 
 AP_HAL_MAIN();
