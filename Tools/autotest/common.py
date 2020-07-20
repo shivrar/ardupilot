@@ -6246,9 +6246,9 @@ switch value'''
         )
         if gpi is None:
             raise NotAchievedException("Did not get GLOBAL_POSITION_INT message")
-        gpi_relative_alt = gpi.relative_alt
-        self.progress("GLOBAL_POSITION_INT rel_alt==%f frsky==%f" % (gpi_relative_alt, home_alt_m))
-        if abs(gpi_relative_alt - home_alt_m) < 1:
+        gpi_relative_alt_m = gpi.relative_alt/1000.0
+        self.progress("GLOBAL_POSITION_INT rel_alt==%fm frsky_home_alt==%fm" % (gpi_relative_alt_m, home_alt_m))
+        if abs(gpi_relative_alt_m - home_alt_m) < 1:
             return True
             # FIXME: need to check other values as well
         return False
@@ -6314,11 +6314,10 @@ switch value'''
         # FIXME: need to check other values as well
         return True
     def tfp_validate_params(self, value):
-        self.progress("validating params (0x%02x)" % value)
         param_id = self.bit_extract(value,24,4)
         param_value = self.bit_extract(value,0,24)
-        if param_id != 1:
-            return False
+        self.progress("received param (0x%02x) (id=%u value=%u)" %
+                      (value, param_id, param_value))
         frame_type = param_value
         hb = self.mav.recv_match(
             type='HEARTBEAT',
@@ -6328,7 +6327,9 @@ switch value'''
         if hb is None:
             raise NotAchievedException("Did not get HEARTBEAT message")
         hb_type = hb.type
-        self.progress("HEARTBEAT type==%f frsky==%f" % (hb_type, frame_type))
+        self.progress("validate_params: HEARTBEAT type==%f frsky==%f param_id=%u" % (hb_type, frame_type, param_id))
+        if param_id != 1:
+            return False
         if hb_type == frame_type:
             return True
             # FIXME: need to check other values as well
@@ -6424,14 +6425,14 @@ switch value'''
             self.progress("Still wanting (%s)" % ",".join([ ("0x%02x" % x) for x in wants.keys()]))
             wants_copy = copy.copy(wants)
             t2 = self.get_sim_time_cached()
-            if t2 - tstart > 60:
+            if t2 - tstart > 300:
                 raise AutoTestTimeoutException("Failed to get frsky data")
             frsky.update()
             for want in wants_copy:
                 data = frsky.get_data(want)
                 if data is None:
                     continue
-                self.progress("Checking %s" % str(want))
+                self.progress("Checking 0x%x" % (want,))
                 if wants[want](data):
                     self.progress("  Fulfilled")
                     del wants[want]
@@ -6632,7 +6633,7 @@ switch value'''
                 data = frsky.get_data(want)
                 if data is None:
                     continue
-                self.progress("Checking %s" % str(want))
+                self.progress("Checking 0x%x" % (want,))
                 if wants[want](data):
                     self.progress("  Fulfilled")
                     del wants[want]
@@ -6767,7 +6768,7 @@ switch value'''
 
             wants_copy = copy.copy(wants)
             for want in wants_copy:
-                self.progress("Checking %s" % str(want))
+                self.progress("Checking %s" % (want,))
                 if wants[want](ltm):
                     self.progress("  Fulfilled")
                     del wants[want]
