@@ -2849,7 +2849,7 @@ class AutoTest(ABC):
     def set_parameter(self, name, value, add_to_context=True, epsilon=0.0002, retries=10):
         """Set parameters from vehicle."""
         self.progress("Setting %s to %f" % (name, value))
-        old_value = self.get_parameter(name, retry=2)
+        old_value = self.get_parameter(name, attempts=2)
         for i in range(1, retries+2):
             self.mavproxy.send("param set %s %s\n" % (name, str(value)))
             returned_value = self.get_parameter(name)
@@ -2864,9 +2864,9 @@ class AutoTest(ABC):
         raise ValueError("Param fetch returned incorrect value (%s) vs (%s)"
                          % (returned_value, value))
 
-    def get_parameter(self, name, retry=1, timeout=60):
+    def get_parameter(self, name, attempts=1, timeout=60):
         """Get parameters from vehicle."""
-        for i in range(0, retry):
+        for i in range(0, attempts):
             # we call get_parameter while the vehicle is rebooting.
             # We need to read out the SITL binary's STDOUT or the
             # process blocks writing to it.
@@ -2874,7 +2874,7 @@ class AutoTest(ABC):
                 util.pexpect_drain(self.sitl)
             self.mavproxy.send("param fetch %s\n" % name)
             try:
-                self.mavproxy.expect("%s = ([-0-9.]*)\r\n" % (name,), timeout=timeout/retry)
+                self.mavproxy.expect("%s = ([-0-9.]*)\r\n" % (name,), timeout=timeout/attempts)
                 try:
                     # sometimes race conditions garble the MAVProxy output
                     ret = float(self.mavproxy.match.group(1))
@@ -3679,14 +3679,18 @@ class AutoTest(ABC):
         self.progress("Waiting for GPS health")
         tstart = self.get_sim_time_cached()
         while True:
-            if self.get_sim_time_cached() - tstart > timeout:
+            now = self.get_sim_time_cached()
+            if now - tstart > timeout:
                 raise AutoTestTimeoutException("GPS status bits did not become good")
             m = self.mav.recv_match(type='SYS_STATUS', blocking=True, timeout=1)
             if m is None:
                 continue
             if (not (m.onboard_control_sensors_present & mavutil.mavlink.MAV_SYS_STATUS_SENSOR_GPS)):
                 self.progress("GPS not present")
-                return
+                if now > 5:
+                    # it's had long enough to be detected....
+                    return
+                continue
             if (not (m.onboard_control_sensors_enabled & mavutil.mavlink.MAV_SYS_STATUS_SENSOR_GPS)):
                 self.progress("GPS not enabled")
                 continue
@@ -4689,6 +4693,7 @@ Also, ignores heartbeats not from our target system'''
             self.start_subtest("Try magcal and wait success")
             self.progress("Compass mask is %s" % "{0:b}".format(target_mask))
             reset_pos_and_start_magcal(target_mask)
+            progress_count = [0] * compass_tnumber
             reached_pct = [0] * compass_tnumber
             report_get = [0] * compass_tnumber
             tstart = self.get_sim_time()
@@ -4704,16 +4709,19 @@ Also, ignores heartbeats not from our target system'''
                                 raise NotAchievedException("Mag calibration report SUCCESS without 100%% completion")
                             report_get[m.compass_id] = 1
                         else:
-                            raise NotAchievedException("Mag calibration didn't SUCCESS")
+                            raise NotAchievedException(
+                                "Mag calibration didn't SUCCEED (cal_status=%u) (progress_count=%s)" %
+                                (m.cal_status, progress_count[m.compass_id],))
                     if all(ele >= 1 for ele in report_get):
                         self.progress("All Mag report SUCCESS")
                         break
                 if m is not None and m.get_type() == "MAG_CAL_PROGRESS":
                     cid = m.compass_id
                     new_pct = int(m.completion_pct)
+                    progress_count[cid] += 1
                     if new_pct != reached_pct[cid]:
                         reached_pct[cid] = new_pct
-                        self.progress("Calibration progress compass ID %d: %s" % (cid, str(reached_pct[cid])))
+                        self.progress("Calibration progress compass ID %d: %s%%" % (cid, str(reached_pct[cid])))
             self.mavproxy.send("sitl_stop\n")
             self.mavproxy.send("sitl_attitude 0 0 0\n")
             self.progress("Checking that value aren't changed without acceptation")
@@ -5876,8 +5884,8 @@ switch value'''
             # uses CMD_TOTAL not MIS_TOTAL, and it's in a scalr not a
             # group and it's generally all bad.
             return
-        self.start_subtest("Ensure GCS is not be able to set MIS_TOTAL")
-        old_mt = self.get_parameter("MIS_TOTAL")
+        self.start_subtest("Ensure GCS is not able to set MIS_TOTAL")
+        old_mt = self.get_parameter("MIS_TOTAL", attempts=20) # retries to avoid seeming race condition with MAVProxy
         ex = None
         try:
             self.set_parameter("MIS_TOTAL", 17, retries=0)
@@ -6876,10 +6884,10 @@ switch value'''
                 avg = None
             else:
                 avg = self.total_waiting_to_arm_time/self.waiting_to_arm_count
-            self.progress("Spent %f seconds waiting to arm. count=%u avg=%f" %
+            self.progress("Spent %f seconds waiting to arm. count=%u avg=%s" %
                           (self.total_waiting_to_arm_time,
-                          self.waiting_to_arm_count,
-                          avg))
+                           self.waiting_to_arm_count,
+                           str(avg)))
             self.show_test_timings()
         if self.forced_post_test_sitl_reboots != 0:
             print("Had to force-reset SITL %u times" %
