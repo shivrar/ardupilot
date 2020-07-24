@@ -11,6 +11,9 @@
 
 #include <AP_Beacon/AP_Beacon_PozyxI2C.h>
 
+#define CHECK_BIT(var,pos) ((var) & (1<<(pos)))
+//Simple macro for bit checking
+
 
 const AP_HAL::HAL& hal = AP_HAL::get_HAL();
 //We can hardcode the anchor positions here for the time being
@@ -19,6 +22,8 @@ void setup();
 void loop();
 static AP_SerialManager serial_manager;
 AP_HAL::OwnPtr<AP_HAL::Device> dev;
+
+bool toggle;
 
 
 AP_Beacon beacon(serial_manager);
@@ -32,7 +37,7 @@ void setup(void)
      * -Configure the pozyx tag with the relvenat acnhor, algorithm, dimension etc.
      * */
     pozyx.init(1);
-
+    toggle = true;
 //    dev = std::move(hal.i2c_mgr->get_device(1, POZYX_I2C_ADDRESS));
 
     hal.console->printf("hello world\n");
@@ -41,18 +46,7 @@ void setup(void)
 void loop(void)
 {
     // Do positioning periodically and serial print it -> we can look at this using a serial moniter or mavproxy
-    int16_t acceleration_raw[3];
-//    WITH_SEMAPHORE(dev->get_semaphore());
 //    if(!dev->read_registers(POZYX_ACCEL_X, (uint8_t*)&acceleration_raw, 3*sizeof(int16_t))){
-    if(!pozyx.reg_read(POZYX_ACCEL_X, (uint8_t*)&acceleration_raw, 3*sizeof(int16_t)))
-    {
-        hal.console->printf("Failed to read data\n");
-    }
-    else{
-        hal.console->printf("Accel x: %i\n",acceleration_raw[0]);
-        hal.console->printf("Accel y: %i\n",acceleration_raw[1]);
-        hal.console->printf("Accel z: %i\n",acceleration_raw[2]);
-    }
 //    dev->read_registers(POZYX_ACCEL_X, (uint8_t*)&acceleration_raw, 3*sizeof(int16_t));
 //    uint32_t bus_id;
 //    bus_id = dev->get_bus_id();
@@ -60,8 +54,37 @@ void loop(void)
 //    uint8_t bus_address;
 //    bus_address = dev->get_bus_address();
 //    hal.console->printf("Bus address: %i\n",bus_address);
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~//
+//    int16_t acceleration_raw[3];
+//    if(!pozyx.reg_read(POZYX_ACCEL_X, (uint8_t*)&acceleration_raw, 3*sizeof(int16_t)))
+//    {
+//        hal.console->printf("Failed to read data\n");
+//    }
+//    else{
+//        hal.console->printf("Accel x: %i\n",acceleration_raw[0]);
+//        hal.console->printf("Accel y: %i\n",acceleration_raw[1]);
+//        hal.console->printf("Accel z: %i\n",acceleration_raw[2]);
+//    }
 
+    uint8_t cmd; // Turn on all the the leds
 
+    uint8_t recv;
+
+    if(toggle){
+        cmd = 0b11110010;
+        toggle = false;
+    } else{
+        cmd = 0b11110100;
+        toggle = true;
+    }
+
+    bool status = pozyx.reg_function(POZYX_LED_CTRL, &cmd, 1, &recv, 1);
+    if(status==POZYX_SUCCESS)
+    {
+        hal.console->printf("Successfully ran register function, result=%i\n", recv);
+    } else{
+        hal.console->printf("Failed to run function. result=%i\n", recv);
+    }
     hal.scheduler->delay(1000);
     hal.console->printf("*\n");
 }

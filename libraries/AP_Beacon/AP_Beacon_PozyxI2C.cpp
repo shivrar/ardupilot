@@ -113,18 +113,19 @@ bool AP_Beacon_PozyxI2C::write_bytes(uint8_t *write_buf_u8, uint32_t len_u8)
 
 int AP_Beacon_PozyxI2C::write_read(uint8_t* write_data, int write_len, uint8_t* read_data, int read_len)
 {
-    WITH_SEMAPHORE(_dev->get_semaphore());
 //    Core function write and read functionality
-    if(!this->write_bytes(write_data, write_len)){
-        return POZYX_FAILURE;
-    }
-
-//    After reading let's wait for a reply
-//    TODO: Look at a timeout scheme here just in case
-    if(!_dev->read(read_data, read_len)){
-        return POZYX_FAILURE;
-    }
-
-    return POZYX_SUCCESS;
+//    if(!this->write_bytes(write_data, write_len)){
+//        return POZYX_FAILURE;
+//    }
+////    We want a repeated start
+////    After reading let's wait for a reply
+////    TODO: Look at a timeout scheme here just in case
+//    if(!_dev->read(read_data, read_len)){
+//        return POZYX_FAILURE;
+//    }
+    bool status;
+    WITH_SEMAPHORE(_dev->get_semaphore());
+    status = _dev->transfer(write_data, write_len, read_data, read_len)?  POZYX_SUCCESS : POZYX_FAILURE;
+    return status;
 
 }
