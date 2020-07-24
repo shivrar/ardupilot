@@ -96,9 +96,9 @@ int AP_Beacon_PozyxI2C::reg_function(uint8_t reg_address, uint8_t *params, int p
 
     WITH_SEMAPHORE(_dev->get_semaphore());
     status = this->write_read(write_data, param_size+1, read_data, size+1);
-    if(status == POZYX_FAILURE)
+    if(status == POZYX_FAILURE) {
         return status;
-
+    }
     memcpy(pData, read_data+1, size);
     // the first byte that a function returns is always it's success indicator, so we simply pass this through
     return read_data[0];

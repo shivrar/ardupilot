@@ -71,10 +71,10 @@ void loop(void)
     uint8_t recv;
 
     if(toggle){
-        cmd = 0b11110010;
+        cmd = 0b01100010;
         toggle = false;
     } else{
-        cmd = 0b11110100;
+        cmd = 0b01100100;
         toggle = true;
     }
 
@@ -85,6 +85,7 @@ void loop(void)
     } else{
         hal.console->printf("Failed to run function. result=%i\n", recv);
     }
+
     hal.scheduler->delay(1000);
     hal.console->printf("*\n");
 }
