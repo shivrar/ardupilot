@@ -34,7 +34,7 @@ public:
     //TODO: Check to see if this is already an implementation for this
     int reg_read(uint8_t reg_address, uint8_t *pData, uint32_t size);
 
-    int reg_write(uint8_t reg_address, uint8_t pData);
+    int reg_write(uint8_t reg_address, uint8_t *params, int param_size);
 
     int reg_function(uint8_t reg_address, uint8_t *params, int param_size, uint8_t *pData, uint32_t size);
 
@@ -51,6 +51,7 @@ private:
         uint32_t timestamp;
     };
 
+    uint16_t interval_ms = 1000;
 
     // Lets have a member variable to store the hal i2c ifc
     AP_HAL::OwnPtr<AP_HAL::Device> _dev;

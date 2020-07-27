@@ -34,6 +34,42 @@ void AP_Beacon_PozyxI2C::init(int8_t bus)
     }
     whoami = regs[0];
     hal.console->printf("Who am I Pozyx:%x \n", whoami);
+
+    this->reg_function(POZYX_DEVICES_CLEAR, nullptr, 0, nullptr, 1);
+
+
+    //    TODO: Look at coding these in a parameter
+    uint16_t anchors[4] = {0x6E2B, 0x676C, 0x670A, 0x6E22};     // the network id of the anchors: change these to the network ids of your anchors.
+    Vector3i anchor_pos[4] = {Vector3i(0, 645, 1214), Vector3i(2737, -410, 1913), Vector3i(3651, 4120, 1853), Vector3i(1541, 4450, 1775)};
+
+    //Iterate and set the positions in the tag. Look at possibly not hardcoding this
+    for(int i = 0; i < 4; i++){
+        uint8_t dev_params[15];
+
+        Vector3i curr_anc_pos = anchor_pos[i];
+
+        int32_t x = curr_anc_pos.x;
+        int32_t y = curr_anc_pos.y;
+        int32_t z = curr_anc_pos.z;
+
+
+    //  Lord forgive me for I have memcpy'ed again
+        memcpy(dev_params, anchors+i, 2); //First 2 bytes refer to the Network id
+        dev_params[2] = 1; //Third byte to represent an anchor
+        memcpy(dev_params+3, &x, 4); // Next 4 bytes is the x position
+        memcpy(dev_params+7, &y, 4); // Next 4 bytes is the y position
+        memcpy(dev_params+11, &z, 4); // Next 4 bytes is the z position
+        bool status = this->reg_function(POZYX_DEVICE_ADD, dev_params, 15, nullptr, 1);
+        if(!status){
+            hal.console->printf("Error Setting Anchor Positions\n");
+        }
+    }
+
+    if(this->reg_write(POZYX_POS_INTERVAL, (uint8_t*)&interval_ms, 2))
+    {
+        hal.console->printf("Error Setting Tag to continuous positioning\n");
+    }
+
 }
 
 AP_Beacon_PozyxI2C::AP_Beacon_PozyxI2C(AP_Beacon &frontend):
@@ -72,14 +108,17 @@ int AP_Beacon_PozyxI2C::reg_read(uint8_t reg_address, uint8_t *pData, uint32_t s
     return status;
 }
 
-int AP_Beacon_PozyxI2C::reg_write(uint8_t reg_address, uint8_t pData)
+int AP_Beacon_PozyxI2C::reg_write(uint8_t reg_address, uint8_t *params, int param_size)
 {
-//    This preliminary test is a good precursory check but there's some weird logic in the macro
-//    if(!IS_REG_READABLE(reg_address))
-//        return POZYX_FAILURE;
-    // single register write
+    uint8_t status;
+
+    uint8_t write_data[param_size+1];
+    write_data[0] = reg_address;
+    memcpy(write_data+1, params, param_size);
+
     WITH_SEMAPHORE(_dev->get_semaphore());
-    return this->_dev->write_register(reg_address, pData)? POZYX_SUCCESS : POZYX_FAILURE;
+    status = this->write_read(write_data, param_size+1, nullptr, 0);
+    return status? POZYX_SUCCESS:POZYX_FAILURE;
 }
 
 int AP_Beacon_PozyxI2C::reg_function(uint8_t reg_address, uint8_t *params, int param_size, uint8_t *pData, uint32_t size)
@@ -114,15 +153,6 @@ bool AP_Beacon_PozyxI2C::write_bytes(uint8_t *write_buf_u8, uint32_t len_u8)
 int AP_Beacon_PozyxI2C::write_read(uint8_t* write_data, int write_len, uint8_t* read_data, int read_len)
 {
 //    Core function write and read functionality
-//    if(!this->write_bytes(write_data, write_len)){
-//        return POZYX_FAILURE;
-//    }
-////    We want a repeated start
-////    After reading let's wait for a reply
-////    TODO: Look at a timeout scheme here just in case
-//    if(!_dev->read(read_data, read_len)){
-//        return POZYX_FAILURE;
-//    }
     bool status;
     WITH_SEMAPHORE(_dev->get_semaphore());
     status = _dev->transfer(write_data, write_len, read_data, read_len)?  POZYX_SUCCESS : POZYX_FAILURE;

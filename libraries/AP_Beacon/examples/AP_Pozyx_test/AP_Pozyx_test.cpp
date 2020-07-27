@@ -66,24 +66,33 @@ void loop(void)
 //        hal.console->printf("Accel z: %i\n",acceleration_raw[2]);
 //    }
 
-    uint8_t cmd; // Turn on all the the leds
+//    uint8_t cmd; // Turn on all the the leds
+//
+//    if(toggle){
+//        cmd = 0b01100010;
+//        toggle = false;
+//    } else{
+//        cmd = 0b01100100;
+//        toggle = true;
+//    }
+//
+//    bool status = pozyx.reg_function(POZYX_LED_CTRL, &cmd, 1, nullptr, 1);
+//    if(status==POZYX_SUCCESS)
+//    {
+//        hal.console->printf("Successfully ran register function, result=%i\n", status);
+//    } else{
+//        hal.console->printf("Failed to run function. result=%i\n", status);
+//    }
 
-    uint8_t recv;
 
-    if(toggle){
-        cmd = 0b01100010;
-        toggle = false;
-    } else{
-        cmd = 0b01100100;
-        toggle = true;
-    }
+    uint16_t interval;
+    bool  status = pozyx.reg_read(POZYX_POS_INTERVAL, (uint8_t*)&interval, 2);
 
-    bool status = pozyx.reg_function(POZYX_LED_CTRL, &cmd, 1, &recv, 1);
     if(status==POZYX_SUCCESS)
     {
-        hal.console->printf("Successfully ran register function, result=%i\n", recv);
+        hal.console->printf("Successfully got device interval=%i\n", interval);
     } else{
-        hal.console->printf("Failed to run function. result=%i\n", recv);
+        hal.console->printf("Failed to get interval");
     }
 
     hal.scheduler->delay(1000);
