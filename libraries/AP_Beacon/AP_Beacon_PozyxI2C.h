@@ -12,6 +12,10 @@
 #include "AP_Pozyx_definitions.h"
 #include <AP_HAL/I2CDevice.h>
 
+
+#define CHECK_BIT(var,pos) ((var) & (1<<(pos)))
+//Simple macro for bit checking
+
 class AP_Beacon_PozyxI2C : public AP_Beacon_Backend
 {
 public:
@@ -27,9 +31,6 @@ public:
     // Setup the relevant stuffies for the Pozyx tag
     void init(int8_t bus);
 
-    // Would need to add a anchor which would need the position (x,y,z) and the ID
-    void add_device(const Vector3f& position, uint16_t tag_id);
-
     // This is essentially the main function call we'll use to get the relevant data from the pozyx
     //TODO: Check to see if this is already an implementation for this
     int reg_read(uint8_t reg_address, uint8_t *pData, uint32_t size);
@@ -43,19 +44,12 @@ public:
     bool write_bytes(uint8_t *write_buf_u8, uint32_t len_u8);
 
 private:
-    struct PACKED Coordinate{
-        // Coordinate data will be stored as mm
-        int32_t x;
-        int32_t y;
-        int32_t z;
-        uint32_t timestamp;
-    };
-
-    uint16_t interval_ms = 1000;
+    uint16_t interval_ms = 100;
 
     // Lets have a member variable to store the hal i2c ifc
     AP_HAL::OwnPtr<AP_HAL::Device> _dev;
 
+    uint32_t last_update_ms;
 };
 
 //

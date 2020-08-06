@@ -11,9 +11,6 @@
 
 #include <AP_Beacon/AP_Beacon_PozyxI2C.h>
 
-#define CHECK_BIT(var,pos) ((var) & (1<<(pos)))
-//Simple macro for bit checking
-
 
 const AP_HAL::HAL& hal = AP_HAL::get_HAL();
 //We can hardcode the anchor positions here for the time being
@@ -43,8 +40,7 @@ void setup(void)
     hal.console->printf("hello world\n");
 }
 
-void loop(void)
-{
+void loop(void) {
     // Do positioning periodically and serial print it -> we can look at this using a serial moniter or mavproxy
 //    if(!dev->read_registers(POZYX_ACCEL_X, (uint8_t*)&acceleration_raw, 3*sizeof(int16_t))){
 //    dev->read_registers(POZYX_ACCEL_X, (uint8_t*)&acceleration_raw, 3*sizeof(int16_t));
@@ -85,17 +81,38 @@ void loop(void)
 //    }
 
 
-    uint16_t interval;
-    bool  status = pozyx.reg_read(POZYX_POS_INTERVAL, (uint8_t*)&interval, 2);
+//    uint16_t interval;
+//    bool  status = pozyx.reg_read(POZYX_POS_INTERVAL, (uint8_t*)&interval, 2);
+//
+//    if(status==POZYX_SUCCESS)
+//    {
+//        hal.console->printf("Successfully got device interval=%i\n", interval);
+//    } else{
+//        hal.console->printf("Failed to get interval");
+//    }
 
-    if(status==POZYX_SUCCESS)
-    {
-        hal.console->printf("Successfully got device interval=%i\n", interval);
-    } else{
-        hal.console->printf("Failed to get interval");
+    uint8_t interrupt_status;
+    pozyx.reg_read(POZYX_INT_STATUS, &interrupt_status, 1);
+
+    if (CHECK_BIT(interrupt_status, 0) == 1) {
+        uint8_t error_code;
+        pozyx.reg_read(POZYX_ERRORCODE, &error_code, 1);
+        hal.console->printf("Error Code =%x\n", error_code);
+    } else {
+        int32_t coordinates[3];
+
+        bool status = pozyx.reg_read(POZYX_POS_X, (uint8_t*)&coordinates, 3* sizeof(int32_t));
+        if(status==POZYX_SUCCESS)
+        {
+            hal.console->printf("Position x: %li\n",coordinates[0]);
+            hal.console->printf("Position y: %li\n",coordinates[1]);
+            hal.console->printf("Position z: %li\n",coordinates[2]);
+        } else{
+            hal.console->printf("Failed to get position");
+        }
     }
 
-    hal.scheduler->delay(1000);
+    hal.scheduler->delay(100);
     hal.console->printf("*\n");
 }
 
