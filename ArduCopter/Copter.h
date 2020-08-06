@@ -133,9 +133,9 @@
 #if PROXIMITY_ENABLED == ENABLED
  # include <AP_Proximity/AP_Proximity.h>
 #endif
-#if MOUNT == ENABLED
- #include <AP_Mount/AP_Mount.h>
-#endif
+
+#include <AP_Mount/AP_Mount.h>
+
 #if CAMERA == ENABLED
  # include <AP_Camera/AP_Camera.h>
 #endif
@@ -489,7 +489,7 @@ private:
 #endif
 
     // Camera/Antenna mount tracking and stabilisation stuff
-#if MOUNT == ENABLED
+#if HAL_MOUNT_ENABLED
     AP_Mount camera_mount;
 #endif
 
@@ -661,7 +661,6 @@ private:
     // Attitude.cpp
     float get_pilot_desired_yaw_rate(int16_t stick_angle);
     void update_throttle_hover();
-    void set_throttle_takeoff();
     float get_pilot_desired_climb_rate(float throttle_control);
     float get_non_takeoff_throttle();
     float get_avoidance_adjusted_climbrate(float target_rate);

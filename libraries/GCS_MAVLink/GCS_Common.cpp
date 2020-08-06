@@ -65,6 +65,7 @@
   #endif
   #include <AP_ToshibaCAN/AP_ToshibaCAN.h>
   #include <AP_PiccoloCAN/AP_PiccoloCAN.h>
+  #include <AP_UAVCAN/AP_UAVCAN.h>
 #endif
 
 #include <AP_BattMonitor/AP_BattMonitor.h>
@@ -577,11 +578,13 @@ void GCS_MAVLINK::handle_mission_write_partial_list(const mavlink_message_t &msg
  */
 void GCS_MAVLINK::handle_mount_message(const mavlink_message_t &msg)
 {
+#if HAL_MOUNT_ENABLED
     AP_Mount *mount = AP::mount();
     if (mount == nullptr) {
         return;
     }
     mount->handle_message(chan, msg);
+#endif
 }
 
 /*
@@ -589,11 +592,13 @@ void GCS_MAVLINK::handle_mount_message(const mavlink_message_t &msg)
  */
 void GCS_MAVLINK::handle_param_value(const mavlink_message_t &msg)
 {
+#if HAL_MOUNT_ENABLED
     AP_Mount *mount = AP::mount();
     if (mount == nullptr) {
         return;
     }
     mount->handle_param_value(msg);
+#endif
 }
 
 void GCS_MAVLINK::send_text(MAV_SEVERITY severity, const char *fmt, ...) const
@@ -1716,14 +1721,15 @@ void GCS_MAVLINK::send_scaled_imu(uint8_t instance, void (*send_fn)(mavlink_chan
 // send data for barometer and airspeed sensors instances.  In the
 // case that we run out of instances of one before the other we send
 // the relevant fields as 0.
-void GCS_MAVLINK::send_scaled_pressure_instance(uint8_t instance, void (*send_fn)(mavlink_channel_t chan, uint32_t time_boot_ms, float press_abs, float press_diff, int16_t temperature))
+void GCS_MAVLINK::send_scaled_pressure_instance(uint8_t instance, void (*send_fn)(mavlink_channel_t chan, uint32_t time_boot_ms, float press_abs, float press_diff, int16_t temperature, int16_t temperature_press_diff))
 {
     const AP_Baro &barometer = AP::baro();
 
     bool have_data = false;
 
     float press_abs = 0.0f;
-    float temperature = 0.0f;
+    float temperature = 0.0f; // Absolute pressure temperature
+    float temperature_press_diff = 0.0f; // TODO: Differential pressure temperature
     if (instance < barometer.num_instances()) {
         press_abs = barometer.get_pressure(instance) * 0.01f;
         temperature = barometer.get_temperature(instance)*100;
@@ -1747,7 +1753,8 @@ void GCS_MAVLINK::send_scaled_pressure_instance(uint8_t instance, void (*send_fn
         AP_HAL::millis(),
         press_abs, // hectopascal
         press_diff, // hectopascal
-        temperature); // 0.01 degrees C
+        temperature, // 0.01 degrees C
+        temperature_press_diff); // 0.01 degrees C
 }
 
 void GCS_MAVLINK::send_scaled_pressure()
@@ -3741,11 +3748,15 @@ MAV_RESULT GCS_MAVLINK::handle_command_accelcal_vehicle_pos(const mavlink_comman
 
 MAV_RESULT GCS_MAVLINK::handle_command_mount(const mavlink_command_long_t &packet)
 {
+#if HAL_MOUNT_ENABLED
     AP_Mount *mount = AP::mount();
     if (mount == nullptr) {
         return MAV_RESULT_UNSUPPORTED;
     }
     return mount->handle_command_long(packet);
+#else
+    return MAV_RESULT_UNSUPPORTED;
+#endif
 }
 
 MAV_RESULT GCS_MAVLINK::handle_command_do_set_home(const mavlink_command_long_t &packet)
@@ -4001,6 +4012,7 @@ void GCS_MAVLINK::handle_command_long(const mavlink_message_t &msg)
 
 MAV_RESULT GCS_MAVLINK::handle_command_do_set_roi(const Location &roi_loc)
 {
+#if HAL_MOUNT_ENABLED
     AP_Mount *mount = AP::mount();
     if (mount == nullptr) {
         return MAV_RESULT_UNSUPPORTED;
@@ -4021,6 +4033,9 @@ MAV_RESULT GCS_MAVLINK::handle_command_do_set_roi(const Location &roi_loc)
         mount->set_roi_target(roi_loc);
     }
     return MAV_RESULT_ACCEPTED;
+#else
+    return MAV_RESULT_UNSUPPORTED;
+#endif
 }
 
 MAV_RESULT GCS_MAVLINK::handle_command_int_do_set_home(const mavlink_command_int_t &packet)
@@ -4056,12 +4071,16 @@ MAV_RESULT GCS_MAVLINK::handle_command_int_do_set_home(const mavlink_command_int
 
 MAV_RESULT GCS_MAVLINK::handle_command_do_set_roi_sysid(const uint8_t sysid)
 {
+#if HAL_MOUNT_ENABLED
     AP_Mount *mount = AP::mount();
     if (mount == nullptr) {
         return MAV_RESULT_UNSUPPORTED;
     }
     mount->set_target_sysid(sysid);
     return MAV_RESULT_ACCEPTED;
+#else
+    return MAV_RESULT_UNSUPPORTED;
+#endif
 }
 
 MAV_RESULT GCS_MAVLINK::handle_command_do_set_roi_sysid(const mavlink_command_int_t &packet)
@@ -4346,20 +4365,24 @@ void GCS_MAVLINK::send_global_position_int()
 
 void GCS_MAVLINK::send_gimbal_report() const
 {
+#if HAL_MOUNT_ENABLED
     AP_Mount *mount = AP::mount();
     if (mount == nullptr) {
         return;
     }
     mount->send_gimbal_report(chan);
+#endif
 }
 
 void GCS_MAVLINK::send_mount_status() const
 {
+#if HAL_MOUNT_ENABLED
     AP_Mount *mount = AP::mount();
     if (mount == nullptr) {
         return;
     }
     mount->send_mount_status(chan);
+#endif
 }
 
 void GCS_MAVLINK::send_set_position_target_global_int(uint8_t target_system, uint8_t target_component, const Location& loc)
@@ -4714,7 +4737,13 @@ bool GCS_MAVLINK::try_send_message(const enum ap_message id)
                     break;
                 }
 #endif
-                case AP_BoardConfig_CAN::Protocol_Type_UAVCAN:
+                case AP_BoardConfig_CAN::Protocol_Type_UAVCAN: {
+                    AP_UAVCAN *ap_uavcan = AP_UAVCAN::get_uavcan(i);
+                    if (ap_uavcan != nullptr) {
+                        ap_uavcan->send_esc_telemetry_mavlink(uint8_t(chan));
+                    }
+                    break;
+                }
                 case AP_BoardConfig_CAN::Protocol_Type_None:
                 default:
                     break;
