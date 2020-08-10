@@ -16,6 +16,7 @@
 #include "AP_Beacon.h"
 #include "AP_Beacon_Backend.h"
 #include "AP_Beacon_Pozyx.h"
+#include "AP_Beacon_PozyxI2C.h"
 #include "AP_Beacon_Marvelmind.h"
 #include "AP_Beacon_SITL.h"
 
@@ -97,6 +98,8 @@ void AP_Beacon::init(void)
         _driver = new AP_Beacon_Pozyx(*this, serial_manager);
     } else if (_type == AP_BeaconType_Marvelmind) {
         _driver = new AP_Beacon_Marvelmind(*this, serial_manager);
+    } else if(_type == AP_BeaconType_Pozyx_I2C){
+        _driver = new AP_Beacon_PozyxI2C(*this);
     }
 #if CONFIG_HAL_BOARD == HAL_BOARD_SITL
     if (_type == AP_BeaconType_SITL) {

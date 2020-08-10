@@ -28,9 +28,6 @@ public:
     // update
     void update(void) override;
 
-    // Setup the relevant stuffies for the Pozyx tag
-    void init(int8_t bus);
-
     // This is essentially the main function call we'll use to get the relevant data from the pozyx
     //TODO: Check to see if this is already an implementation for this
     int reg_read(uint8_t reg_address, uint8_t *pData, uint32_t size);
@@ -50,6 +47,9 @@ private:
     AP_HAL::OwnPtr<AP_HAL::Device> _dev;
 
     uint32_t last_update_ms;
+
+    // Setup the relevant stuffies for the Pozyx tag
+    void _init(int8_t bus);
 };
 
 //

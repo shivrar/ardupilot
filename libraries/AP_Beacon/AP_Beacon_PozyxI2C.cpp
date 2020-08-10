@@ -8,7 +8,7 @@
 extern const AP_HAL::HAL& hal;
 
 
-void AP_Beacon_PozyxI2C::init(int8_t bus)
+void AP_Beacon_PozyxI2C::_init(int8_t bus)
 {
     if (bus < 0) {
         // default to i2c external bus
@@ -62,7 +62,7 @@ void AP_Beacon_PozyxI2C::init(int8_t bus)
         if(!status){
             hal.console->printf("Error Setting Anchor Positions\n");
         }
-        set_beacon_position(i, anchor_pos[i]);
+        set_beacon_position((uint8_t)i, Vector3f(x/1000.0f,y/1000.0f,z/1000.0f));
     }
 
     if(this->reg_write(POZYX_POS_INTERVAL, (uint8_t*)&interval_ms, 2))
@@ -75,7 +75,7 @@ void AP_Beacon_PozyxI2C::init(int8_t bus)
 AP_Beacon_PozyxI2C::AP_Beacon_PozyxI2C(AP_Beacon &frontend):
     AP_Beacon_Backend(frontend)
 {
-
+    this->_init(1); //Setup the pozyx device
 }
 
 bool AP_Beacon_PozyxI2C::healthy()
@@ -98,12 +98,12 @@ void AP_Beacon_PozyxI2C::update(void)
 
     if(CHECK_BIT(interrupt_status, 0)  == 1){
         this->reg_read(POZYX_ERRORCODE, &error_code, 1);
-        hal.console->printf("Error Code =%x\n", error_code);
+//        hal.console->printf("Error Code =%x\n", error_code);
         error = true;
     }
 
     if(error){
-        hal.console->printf("Error occurred, unable to position");
+        hal.console->printf("Error occurred, unable to position\n");
     }
     else {
         int32_t coordinates[3];
