@@ -36,16 +36,11 @@ void AP_Beacon_PozyxI2C::_init(int8_t bus)
     hal.console->printf("Who am I Pozyx:%x \n", whoami);
 
     this->reg_function(POZYX_DEVICES_CLEAR, nullptr, 0, nullptr, 1); // Leaving this in for now
-//TODO: Look at coding these in a parameter, for the time being to avoid hard coding let's do the setup via a seperate medium
-//TODO: I have to leave this in for the time being for configuring the tag before use. Not sure why but I'll figure it out later.
-    uint16_t anchors[4] = {0x6E2B, 0x676C, 0x670A, 0x6E22};     // the network id of the anchors: change these to the network ids of your anchors.
-    Vector3i anchor_pos[4] = {Vector3i(0, 645, 1214), Vector3i(2737, -410, 1913), Vector3i(3651, 4120, 1853), Vector3i(1541, 4450, 1775)};
-
     //Iterate and set the positions in the tag. Look at possibly not hardcoding this
-    for(int i = 0; i < 4; i++){
+    for(int i = 0; i < sizeof(this->_anchors)/ sizeof(_anchors[0]); i++){
         uint8_t dev_params[15];
 
-        Vector3i curr_anc_pos = anchor_pos[i];
+        Vector3i curr_anc_pos = _anchor_pos[i];
 
         int32_t x = curr_anc_pos.x;
         int32_t y = curr_anc_pos.y;
@@ -53,11 +48,12 @@ void AP_Beacon_PozyxI2C::_init(int8_t bus)
 
 
     //  Lord forgive me for I have memcpy'ed again
-        memcpy(dev_params, anchors+i, 2); //First 2 bytes refer to the Network id
+        memcpy(dev_params, _anchors+i, 2); //First 2 bytes refer to the Network id
         dev_params[2] = 1; //Third byte to represent an anchor
         memcpy(dev_params+3, &x, 4); // Next 4 bytes is the x position
         memcpy(dev_params+7, &y, 4); // Next 4 bytes is the y position
         memcpy(dev_params+11, &z, 4); // Next 4 bytes is the z position
+        //TODO: can redo this with the DO_RANGING register to both add and get the distance -> could be used for prgramtic setting
         bool status = this->reg_function(POZYX_DEVICE_ADD, dev_params, 15, nullptr, 1);
         if(!status){
             hal.console->printf("Error Setting Anchor Positions\n");
@@ -65,11 +61,15 @@ void AP_Beacon_PozyxI2C::_init(int8_t bus)
         set_beacon_position((uint8_t)i, Vector3f(x/1000.0f,y/1000.0f,z/1000.0f));
     }
 
-    if(this->reg_write(POZYX_POS_INTERVAL, (uint8_t*)&interval_ms, 2))
-    {
-        hal.console->printf("Error Setting Tag to continuous positioning\n");
-    }
+//    uint8_t protocol = POZYX_RANGE_PROTOCOL_PRECISION;
+//    this->reg_write(POZYX_RANGE_PROTOCOL, &protocol, 1);
 
+    this->_update_beacons();
+
+//    if(this->reg_write(POZYX_POS_INTERVAL, (uint8_t*)&interval_ms, 2))
+//    {
+//        hal.console->printf("Error Setting Tag to continuous positioning\n");
+//    }
 }
 
 AP_Beacon_PozyxI2C::AP_Beacon_PozyxI2C(AP_Beacon &frontend):
@@ -90,30 +90,33 @@ void AP_Beacon_PozyxI2C::update(void)
 
     //Should call the set_vehicle_position() from the parent class to pass it into whatever needs it -> look at pozyx_beacon
     //implementation with arduino
-
-    uint8_t interrupt_status;
-    uint8_t error_code;
-    bool error = false;
-    this->reg_read(POZYX_INT_STATUS, &interrupt_status, 1);
-
-    if(CHECK_BIT(interrupt_status, 0)  == 1){
-        this->reg_read(POZYX_ERRORCODE, &error_code, 1);
+    // Update the beacon distance so they can be healthy
+    this ->_update_tag();
+    this->_update_beacons();
+//    uint8_t interrupt_status;
+//    uint8_t error_code;
+//    bool error = false;
+//    this->reg_read(POZYX_INT_STATUS, &interrupt_status, 1);
+//
+//    if(CHECK_BIT(interrupt_status, 0)  == 1){
+//        this->reg_read(POZYX_ERRORCODE, &error_code, 1);
 //        hal.console->printf("Error Code =%x\n", error_code);
-        error = true;
-    }
-
-    if(error){
-        hal.console->printf("Error occurred, unable to position\n");
-    }
-    else {
-        int32_t coordinates[3];
-        if (this->reg_read(POZYX_POS_X, (uint8_t * ) & coordinates, 3 * sizeof(int32_t)) == POZYX_SUCCESS) {
-            Vector3f veh_position(
-                    Vector3f(coordinates[0] / 1000.0f, coordinates[1] / 1000.0f, coordinates[2] / 1000.0f));
-            set_vehicle_position(veh_position, 0.2f); // I can get the xy covarince error buttttttt I 'm just gonna be conservative and use the 20cm accuracy instead
-            this->last_update_ms = AP_HAL::millis();
-        }
-    }
+//        error = true;
+//    }
+//
+//    if(error){
+//        hal.console->printf("Error occurred, unable to position\n");
+//    }
+//    else {
+//        int32_t coordinates[3];
+//        if (this->reg_read(POZYX_POS_X, (uint8_t * ) & coordinates, 3 * sizeof(int32_t)) == POZYX_SUCCESS) {
+//            Vector3f veh_position(
+//                    Vector3f(coordinates[0] / 1000.0f, coordinates[1] / 1000.0f, coordinates[2] / 1000.0f));
+//            set_vehicle_position(veh_position, 0.2f); // I can get the xy covarince error buttttttt I 'm just gonna be conservative and use the 20cm accuracy instead
+//            this->last_update_ms = AP_HAL::millis();
+////            hal.console->printf("Beacon position set\n");
+//        }
+//    }
 }
 
 int AP_Beacon_PozyxI2C::reg_read(uint8_t reg_address, uint8_t *pData, uint32_t size)
@@ -178,3 +181,111 @@ int AP_Beacon_PozyxI2C::write_read(uint8_t* write_data, int write_len, uint8_t* 
     return status;
 
 }
+
+void AP_Beacon_PozyxI2C::_update_beacons(void)
+{
+    //Iterate and set the distance of the beacons if the tag is healthy
+    if(this->healthy()) {
+        for (int i = 0; i < sizeof(this->_anchors) / sizeof(_anchors[0]); i++) {
+            //TODO: there is some weird things happening here for with the DORANGING nonsense
+
+            float x = this->_anchor_pos[i].x / 1000.0f;
+            float y = this->_anchor_pos[i].y / 1000.0f;
+            float z = this->_anchor_pos[i].z / 1000.0f;
+
+            float distance = safe_sqrt(Vector3f(x, y, z).distance_squared(this->_curr_position));
+            set_beacon_distance((uint8_t) i, distance);
+        }
+    }
+}
+
+
+void AP_Beacon_PozyxI2C::_update_tag()
+{
+    if(!this->reg_function(POZYX_DO_POSITIONING, nullptr, 0, nullptr, 1)){
+//        hal.console->printf("Error triggering positioning\n");
+        return;
+    }
+    this->last_tag_update_ms = AP_HAL::millis();
+    uint8_t interrupt_status;
+    bool error = false;
+    uint8_t error_code;
+    this->reg_read(POZYX_INT_STATUS, &interrupt_status, 1);
+
+//    while(CHECK_BIT(interrupt_status, 1) != 1)
+//    {
+//        this->reg_read(POZYX_INT_STATUS, &interrupt_status, 1);
+//        if(AP_HAL::millis() - this->last_tag_update_ms > AP_BEACON_TIMEOUT_MS)
+//        {
+//            hal.console->printf("Positioning Has not completed\n");
+//            break;
+//        }
+//    }
+
+    if(CHECK_BIT(interrupt_status, 0)  == 1){
+        this->reg_read(POZYX_ERRORCODE, &error_code, 1);
+//        hal.console->printf("Error Code =%x\n", error_code);
+        error = true;
+    }
+
+    if(error){
+//        hal.console->printf("Error occurred, unable to position\n");
+        return;
+    }
+    else {
+        int32_t coordinates[3];
+        if (this->reg_read(POZYX_POS_X, (uint8_t * ) & coordinates, 3 * sizeof(int32_t)) == POZYX_SUCCESS) {
+            Vector3f veh_position(
+                    Vector3f(coordinates[0] / 1000.0f, coordinates[1] / 1000.0f, coordinates[2] / 1000.0f));
+            this->_curr_position = veh_position;
+            set_vehicle_position(veh_position, 0.2f); // I can get the xy covarince error buttttttt I 'm just gonna be conservative and use the 20cm accuracy instead
+            this->last_update_ms = AP_HAL::millis();
+//            hal.console->printf("Beacon position set\n");
+        }
+
+    }
+
+
+}
+
+//TODO: recheck this later
+
+//        if(this->reg_function(POZYX_DO_RANGING, (uint8_t*)_anchors+i, sizeof(uint16_t), nullptr, 1) == POZYX_FAILURE){
+//            hal.console->printf("Error in triggering ranging\n");
+//        }
+//        this->last_beacon_update_ms = AP_HAL::millis();
+//        bool error = false;
+//        uint8_t error_code;
+//        uint8_t interrupt_status;
+//        this->reg_read(POZYX_INT_STATUS, &interrupt_status, 1);
+//
+//        if(CHECK_BIT(interrupt_status, 0)  == 1){
+//            this->reg_read(POZYX_ERRORCODE, &error_code, 1);
+//            hal.console->printf("Error Code =%x\n", error_code);
+//            error = true;
+//        }
+//        if(error){
+//            hal.console->printf("Error occurred, unable to range\n");
+//        }
+//        while(CHECK_BIT(interrupt_status, 4) == 0)
+//        {
+//            this->reg_read(POZYX_INT_STATUS, &interrupt_status, 1);
+//
+//            if((AP_HAL::millis() - this->last_beacon_update_ms > AP_BEACON_TIMEOUT_MS))
+//            {
+//                // If we are unable to get the data out for the range measurmensents don't try to set the beacon distances
+//                hal.console->printf("Ranging has not finished before timeout\n");
+//                return;
+//            }
+//        }
+//        else {
+//            uint8_t range_data[11];
+//            if (this->reg_function(POZYX_DEVICE_GETRANGEINFO, (uint8_t*)_anchors+i, sizeof(uint16_t), range_data,
+//                                   11 * sizeof(uint8_t)) == POZYX_SUCCESS) {
+//                float distance;
+//                memcpy(&distance, range_data + 5, sizeof(uint32_t));
+//                set_beacon_distance((uint8_t) i, distance);
+//            } else {
+//
+//                hal.console->printf("Error in retrieving and setting beacon distance\n");
+//            }

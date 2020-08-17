@@ -41,15 +41,28 @@ public:
     bool write_bytes(uint8_t *write_buf_u8, uint32_t len_u8);
 
 private:
-    uint16_t interval_ms = 100;
+//    uint16_t interval_ms = 100;
 
     // Lets have a member variable to store the hal i2c ifc
     AP_HAL::OwnPtr<AP_HAL::Device> _dev;
 
     uint32_t last_update_ms;
+    uint32_t last_beacon_update_ms;
+    uint32_t last_tag_update_ms;
+
+    Vector3f _curr_position;
+
+    //TODO: Look at coding these in a parameter, for the time being to avoid hard coding let's do the setup via a seperate medium
+//TODO: I have to leave this in for the time being for configuring the tag before use. Not sure why but I'll figure it out later.
+    const uint16_t _anchors[4] = {0x6E2B, 0x676C, 0x670A, 0x6E22};     // the network id of the anchors: change these to the network ids of your anchors.
+    const Vector3i _anchor_pos[4] = {Vector3i(0, 645, 1214), Vector3i(2737, -410, 1913), Vector3i(3651, 4120, 1853), Vector3i(1541, 4450, 1775)};
 
     // Setup the relevant stuffies for the Pozyx tag
     void _init(int8_t bus);
+
+    void _update_beacons(void);
+
+    void _update_tag(void);
 };
 
 //
