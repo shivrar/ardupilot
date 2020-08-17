@@ -43,6 +43,7 @@
 #include <AP_EFI/AP_EFI.h>
 #include <AP_Proximity/AP_Proximity.h>
 #include <AP_Scripting/AP_Scripting.h>
+#include <AP_Winch/AP_Winch.h>
 
 #include <stdio.h>
 
@@ -266,7 +267,7 @@ bool GCS_MAVLINK::send_battery_status()
 
     for(uint8_t i = 0; i < AP_BATT_MONITOR_MAX_INSTANCES; i++) {
         const uint8_t battery_id = (last_battery_status_idx + 1) % AP_BATT_MONITOR_MAX_INSTANCES;
-        if (battery.get_type(battery_id) != AP_BattMonitor_Params::BattMonitor_Type::BattMonitor_TYPE_NONE) {
+        if (battery.get_type(battery_id) != AP_BattMonitor::Type::NONE) {
             CHECK_PAYLOAD_SIZE(BATTERY_STATUS);
             send_battery_status(battery_id);
             last_battery_status_idx = battery_id;
@@ -807,6 +808,7 @@ ap_message GCS_MAVLINK::mavlink_id_to_ap_message_id(const uint32_t mavlink_id) c
         { MAVLINK_MSG_ID_AUTOPILOT_VERSION,     MSG_AUTOPILOT_VERSION},
         { MAVLINK_MSG_ID_EFI_STATUS,            MSG_EFI_STATUS},
         { MAVLINK_MSG_ID_GENERATOR_STATUS,      MSG_GENERATOR_STATUS},
+        { MAVLINK_MSG_ID_WINCH_STATUS,          MSG_WINCH_STATUS},
             };
 
     for (uint8_t i=0; i<ARRAY_SIZE(map); i++) {
@@ -4763,6 +4765,11 @@ bool GCS_MAVLINK::try_send_message(const enum ap_message id)
 #endif
         break;
     }
+
+    case MSG_WINCH_STATUS:
+        CHECK_PAYLOAD_SIZE(WINCH_STATUS);
+        send_winch_status();
+        break;
 
     default:
         // try_send_message must always at some stage return true for

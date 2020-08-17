@@ -672,6 +672,15 @@ class AutoTestCopter(AutoTest):
         
     # Tests all actions and logic behind the GCS failsafe
     def fly_gcs_failsafe(self, side=60, timeout=360):
+        try:
+            self.test_gcs_failsafe(side=side, timeout=timeout)
+        except Exception as ex:
+            self.setGCSfailsafe(0)
+            self.set_parameter('FS_OPTIONS', 0)
+            self.reboot_sitl()
+            raise ex
+
+    def test_gcs_failsafe(self, side=60, timeout=360):
         # Trigger telemety loss with failsafe disabled. Verify no action taken.
         self.start_subtest("GCS failsafe disabled test: FS_GCS_ENABLE=0 should take no failsafe action")
         self.setGCSfailsafe(0)
@@ -794,6 +803,23 @@ class AutoTestCopter(AutoTest):
 
     # Tests all actions and logic behind the battery failsafe
     def fly_battery_failsafe(self, timeout=300):
+        ex = None
+        try:
+            self.test_battery_failsafe(timeout=timeout)
+        except Exception as e:
+            ex = e
+
+        self.set_parameter('BATT_LOW_VOLT', 0)
+        self.set_parameter('BATT_CRT_VOLT', 0)
+        self.set_parameter('BATT_FS_LOW_ACT', 0)
+        self.set_parameter('BATT_FS_CRT_ACT', 0)
+        self.set_parameter('FS_OPTIONS', 0)
+        self.reboot_sitl()
+
+        if ex is not None:
+            raise ex
+
+    def test_battery_failsafe(self, timeout=300):
         self.progress("Configure battery failsafe parameters")
         self.set_parameter('SIM_SPEEDUP', 4)
         self.set_parameter('BATT_LOW_VOLT', 11.5)
@@ -817,7 +843,7 @@ class AutoTestCopter(AutoTest):
         self.change_mode("RTL")
         self.wait_disarmed()
         self.set_parameter('SIM_BATT_VOLTAGE', 12.5)
-        self.mavproxy.send('reboot\n')
+        self.reboot_sitl_mavproxy()
         self.end_subtest("Completed Batt failsafe disabled test")
 
         # TWO STAGE BATTERY FAILSAFE: Trigger low battery condition, then critical battery condition. Verify RTL and Land actions complete.
@@ -837,7 +863,7 @@ class AutoTestCopter(AutoTest):
         self.wait_mode("LAND")
         self.wait_disarmed()
         self.set_parameter('SIM_BATT_VOLTAGE', 12.5)
-        self.mavproxy.send('reboot\n')
+        self.reboot_sitl_mavproxy()
         self.end_subtest("Completed two stage battery failsafe test with RTL and Land")
 
         # TWO STAGE BATTERY FAILSAFE: Trigger low battery condition, then critical battery condition. Verify both SmartRTL actions complete
@@ -858,7 +884,7 @@ class AutoTestCopter(AutoTest):
         self.wait_mode("SMART_RTL")
         self.wait_disarmed()
         self.set_parameter('SIM_BATT_VOLTAGE', 12.5)
-        self.mavproxy.send('reboot\n')
+        self.reboot_sitl_mavproxy()
         self.end_subtest("Completed two stage battery failsafe test with SmartRTL")
 
         # Trigger low battery condition in land mode with FS_OPTIONS set to allow land mode to continue. Verify landing completes uninterupted.
@@ -873,7 +899,7 @@ class AutoTestCopter(AutoTest):
         self.wait_mode("LAND")
         self.wait_disarmed()
         self.set_parameter('SIM_BATT_VOLTAGE', 12.5)
-        self.mavproxy.send('reboot\n')
+        self.reboot_sitl_mavproxy()
         self.end_subtest("Completed battery failsafe with FS_OPTIONS set to continue landing")
 
         # Trigger a critical battery condition, which triggers a land mode failsafe. Trigger an RC failure. Verify the RC failsafe is prevented from stopping the low battery landing.
@@ -894,7 +920,7 @@ class AutoTestCopter(AutoTest):
         self.wait_disarmed()
         self.set_parameter('SIM_BATT_VOLTAGE', 12.5)
         self.set_parameter("SIM_RC_FAIL", 0)
-        self.mavproxy.send('reboot\n')
+        self.reboot_sitl_mavproxy()
         self.end_subtest("Completed battery failsafe critical landing")
 
         # Trigger low battery condition with failsafe set to terminate. Copter will disarm and crash.
@@ -908,12 +934,6 @@ class AutoTestCopter(AutoTest):
         self.end_subtest("Completed terminate failsafe test")
 
         self.progress("All Battery failsafe tests complete")
-        self.set_parameter('BATT_LOW_VOLT', 0)
-        self.set_parameter('BATT_CRT_VOLT', 0)
-        self.set_parameter('BATT_FS_LOW_ACT', 0)
-        self.set_parameter('BATT_FS_CRT_ACT', 0)
-        self.set_parameter('FS_OPTIONS', 0)
-        self.reboot_sitl()
 
     # fly_stability_patch - fly south, then hold loiter within 5m
     # position and altitude and reduce 1 motor to 60% efficiency
@@ -1608,7 +1628,7 @@ class AutoTestCopter(AutoTest):
             self.wait_attitude(despitch=90, tolerance=30)
             self.wait_attitude(despitch=-45, tolerance=30)
             self.progress("Waiting for level")
-            self.set_rc(1, 1500) # can't change quickly enough!
+            self.set_rc(2, 1500) # can't change quickly enough!
             self.wait_attitude(despitch=0, desroll=0, tolerance=5)
             self.set_parameter('SIM_SPEEDUP', old_speedup)
             self.change_mode('RTL')
@@ -2461,6 +2481,47 @@ class AutoTestCopter(AutoTest):
         self.set_rc(9, 1000)
         self.disarm_vehicle(force=True)
         self.reboot_sitl()
+
+    def test_motortest(self, timeout=60):
+        self.start_subtest("Testing PWM output")
+        pwm_in = 1300
+        # default frame is "+" - start motor of 2 is "B", which is
+        # motor 1... see
+        # https://ardupilot.org/copter/docs/connect-escs-and-motors.html
+        self.run_cmd(mavutil.mavlink.MAV_CMD_DO_MOTOR_TEST,
+                     2, # start motor
+                     mavutil.mavlink.MOTOR_TEST_THROTTLE_PWM,
+                     pwm_in, # pwm-to-output
+                     1, # timeout in seconds
+                     2, # number of motors to output
+                     0, # compass learning
+                     0,
+                     timeout=timeout)
+        # long timeouts here because they're a pause before we start motors
+        self.wait_servo_channel_value(1, pwm_in, timeout=10)
+        self.wait_servo_channel_value(4, pwm_in, timeout=10)
+        self.wait_statustext("finished motor test")
+        self.end_subtest("Testing PWM output")
+
+        self.start_subtest("Testing percentage output")
+        percentage = 90.1
+        self.run_cmd(mavutil.mavlink.MAV_CMD_DO_MOTOR_TEST,
+                     2, # start motor
+                     mavutil.mavlink.MOTOR_TEST_THROTTLE_PERCENT,
+                     percentage, # pwm-to-output
+                     1, # timeout in seconds
+                     2, # number of motors to output
+                     0, # compass learning
+                     0,
+                     timeout=timeout)
+        # since MOT_SPIN_MIN and MOT_SPIN_MAX are not set, the RC3
+        # min/max are used.
+        expected_pwm = 1000 + (self.get_parameter("RC3_MAX") - self.get_parameter("RC3_MIN")) * percentage/100.0
+        self.progress("expected pwm=%f\n" % expected_pwm)
+        self.wait_servo_channel_value(1, expected_pwm, timeout=10)
+        self.wait_servo_channel_value(4, expected_pwm, timeout=10)
+        self.wait_statustext("finished motor test")
+        self.end_subtest("Testing percentage output")
 
     def fly_precision_sitl(self):
         """Use SITL PrecLand backend precision messages to land aircraft."""
@@ -4822,6 +4883,7 @@ class AutoTestCopter(AutoTest):
         self.set_parameter("SIM_RICH_CTRL", 8)
         self.set_parameter("RC9_OPTION", 85)
         self.set_parameter("LOG_DISARMED", 1)
+        self.set_parameter("BATT2_MONITOR", 17)
         self.set_rc(9, 1000) # remember this is a switch position - stop
         self.customise_SITL_commandline(["--uartF=sim:richenpower"])
         self.mavproxy.expect("requested state is not RUN")
@@ -4853,6 +4915,19 @@ class AutoTestCopter(AutoTest):
 #        self.wait_generator_speed_and_state(3000, 30000, mavutil.mavlink.MAV_GENERATOR_STATUS_FLAG_WARMING_UP)
 
         self.wait_generator_speed_and_state(8000, 30000, mavutil.mavlink.MAV_GENERATOR_STATUS_FLAG_GENERATING)
+
+        bs = self.mav.recv_match(
+            type="BATTERY_STATUS",
+            condition="BATTERY_STATUS.id==1",  # id is zero-indexed
+            timeout=1,
+            blocking=True
+        )
+        if bs is None:
+            raise NotAchievedException("Did not receive BATTERY_STATUS")
+        self.progress("Received battery status: %s" % str(bs))
+        want_bs_volt = 50000
+        if bs.voltages[0] != want_bs_volt:
+            raise NotAchievedException("Battery voltage not as expected (want=%f) got=(%f)" % (want_bs_volt, bs.voltages[0],))
 
         self.progress("Moving *back* to idle")
         self.set_rc(9, 1500) # remember this is a switch position - idle
@@ -5021,6 +5096,21 @@ class AutoTestCopter(AutoTest):
             self.fly_rangefinder_drivers_fly([x[0] for x in do_drivers])
 
         self.fly_rangefinder_mavlink()
+
+        i2c_drivers = [
+            ("maxbotixi2cxl", 2),
+            ]
+        while len(i2c_drivers):
+            do_drivers = i2c_drivers[0:9]
+            i2c_drivers = i2c_drivers[9:]
+            count = 1
+            for d in do_drivers:
+                (sim_name, rngfnd_param_value) = d
+                self.set_parameter("RNGFND%u_TYPE" % count, rngfnd_param_value)
+                count += 1
+
+            self.reboot_sitl()
+            self.fly_rangefinder_drivers_fly([x[0] for x in do_drivers])
 
     def fly_ship_takeoff(self):
         # test ship takeoff
@@ -5328,6 +5418,10 @@ class AutoTestCopter(AutoTest):
             ("CRSF",
              "Test RC CRSF",
              self.test_crsf),
+
+            ("MotorTest",
+             "Run Motor Tests",
+             self.test_motortest),
 
             ("LogUpload",
              "Log upload",

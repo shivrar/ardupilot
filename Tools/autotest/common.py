@@ -2890,7 +2890,9 @@ class AutoTest(ABC):
             if abs(delta) < epsilon:
                 # yes, near-enough-to-equal.
                 if add_to_context:
-                    self.context_get().parameters.append((name, old_value))
+                    context_param_name_list = [p[0] for p in self.context_get().parameters]
+                    if name.upper() not in context_param_name_list:
+                        self.context_get().parameters.append((name, old_value))
                 if self.should_fetch_all_for_parameter_change(name.upper()) and value != 0:
                     self.fetch_parameters()
                 return
@@ -2929,7 +2931,6 @@ class AutoTest(ABC):
     def context_pop(self):
         """Set parameters to origin values in reverse order."""
         dead = self.contexts.pop()
-
         dead_parameters = dead.parameters
         dead_parameters.reverse()
         for p in dead_parameters:
@@ -3308,7 +3309,7 @@ class AutoTest(ABC):
     def reach_heading_manual(self, heading, turn_right=True):
         """Manually direct the vehicle to the target heading."""
         if self.is_copter() or self.is_sub():
-            self.mavproxy.send('rc 4 1580\n')
+            self.set_rc(4, 1580)
             self.wait_heading(heading)
             self.set_rc(4, 1500)
         if self.is_plane():
@@ -3317,8 +3318,8 @@ class AutoTest(ABC):
             steering_pwm = 1700
             if not turn_right:
                 steering_pwm = 1300
-            self.mavproxy.send('rc 1 %u\n' % steering_pwm)
-            self.mavproxy.send('rc 3 1550\n')
+            self.set_rc(1, steering_pwm)
+            self.set_rc(3, 1550)
             self.wait_heading(heading)
             self.set_rc(3, 1500)
             self.set_rc(1, 1500)
@@ -3352,7 +3353,7 @@ class AutoTest(ABC):
         if self.is_plane():
             self.progress("NOT IMPLEMENTED")
         if self.is_rover():
-            self.mavproxy.send('rc 3 1700\n')
+            self.set_rc(3, 1700)
             self.wait_distance(distance, accuracy=2)
             self.set_rc(3, 1500)
 
@@ -3571,7 +3572,7 @@ class AutoTest(ABC):
                 raise ValueError("message (%s) has no field %s" %
                                  (str(m), channel_field))
             if comparator(m_value, value):
-                return
+                return m_value
 
     def wait_rc_channel_value(self, channel, value, timeout=2):
         """wait for channel to hit value"""
@@ -6179,9 +6180,9 @@ switch value'''
     def tf_encode_gps_latitude(self,lat):
         value = 0
         if lat < 0:
-            value = ((abs(lat)/100)*6) | 0x40000000
+            value = ((abs(lat)//100)*6) | 0x40000000
         else:
-            value = ((abs(lat)/100)*6)
+            value = ((abs(lat)//100)*6)
         return value
 
     def tf_validate_gps(self, value): # shared by proto 4 and proto 10
