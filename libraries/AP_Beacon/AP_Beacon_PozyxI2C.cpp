@@ -37,7 +37,7 @@ void AP_Beacon_PozyxI2C::_init(int8_t bus)
 
     this->reg_function(POZYX_DEVICES_CLEAR, nullptr, 0, nullptr, 1); // Leaving this in for now
     //Iterate and set the positions in the tag. Look at possibly not hardcoding this
-    for(int i = 0; i < sizeof(this->_anchors)/ sizeof(_anchors[0]); i++){
+    for(unsigned int i = 0; i < sizeof(this->_anchors)/ sizeof(_anchors[0]); i++){
         uint8_t dev_params[15];
 
         Vector3i curr_anc_pos = _anchor_pos[i];
@@ -63,6 +63,16 @@ void AP_Beacon_PozyxI2C::_init(int8_t bus)
 
 //    uint8_t protocol = POZYX_RANGE_PROTOCOL_PRECISION;
 //    this->reg_write(POZYX_RANGE_PROTOCOL, &protocol, 1);
+
+    uint8_t algorithm = POZYX_POS_ALG_TRACKING;
+    uint8_t pos_dim = 1;
+    uint8_t pos_alg = algorithm | (pos_dim<<4);
+    this->reg_write(POZYX_POS_ALG, &pos_alg, 1);
+
+    int32_t z_pos = 928;
+
+    //Due to the limited anchors and configurations lets just work on a planar surface for now.
+    this->reg_write(POZYX_POS_Z, (uint8_t*)&z_pos, sizeof(int32_t));
 
     this->_update_beacons();
 
@@ -186,7 +196,7 @@ void AP_Beacon_PozyxI2C::_update_beacons(void)
 {
     //Iterate and set the distance of the beacons if the tag is healthy
     if(this->healthy()) {
-        for (int i = 0; i < sizeof(this->_anchors) / sizeof(_anchors[0]); i++) {
+        for ( unsigned int i = 0; i < sizeof(this->_anchors) / sizeof(_anchors[0]); i++) {
             //TODO: there is some weird things happening here for with the DORANGING nonsense
 
             float x = this->_anchor_pos[i].x / 1000.0f;
@@ -203,7 +213,7 @@ void AP_Beacon_PozyxI2C::_update_beacons(void)
 void AP_Beacon_PozyxI2C::_update_tag()
 {
     if(!this->reg_function(POZYX_DO_POSITIONING, nullptr, 0, nullptr, 1)){
-//        hal.console->printf("Error triggering positioning\n");
+        hal.console->printf("Error triggering positioning\n");
         return;
     }
     this->last_tag_update_ms = AP_HAL::millis();
@@ -224,12 +234,12 @@ void AP_Beacon_PozyxI2C::_update_tag()
 
     if(CHECK_BIT(interrupt_status, 0)  == 1){
         this->reg_read(POZYX_ERRORCODE, &error_code, 1);
-//        hal.console->printf("Error Code =%x\n", error_code);
+        hal.console->printf("Error Code =%x\n", error_code);
         error = true;
     }
 
     if(error){
-//        hal.console->printf("Error occurred, unable to position\n");
+        hal.console->printf("Error occurred, unable to position\n");
         return;
     }
     else {
@@ -240,7 +250,7 @@ void AP_Beacon_PozyxI2C::_update_tag()
             this->_curr_position = veh_position;
             set_vehicle_position(veh_position, 0.2f); // I can get the xy covarince error buttttttt I 'm just gonna be conservative and use the 20cm accuracy instead
             this->last_update_ms = AP_HAL::millis();
-//            hal.console->printf("Beacon position set\n");
+//            hal.console->printf("Vehicle position set\n");
         }
 
     }
