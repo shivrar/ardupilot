@@ -1,5 +1,5 @@
 /*
-  simple test of UART interfaces
+  simple test of I2C interfaces
  */
 
 #include <AP_HAL/AP_HAL.h>
